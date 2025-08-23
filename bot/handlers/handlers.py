@@ -1,14 +1,12 @@
 import logging
+import tempfile
+import os
 from aiogram import Router, types, F
 from aiogram.enums import ChatAction
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from bot.services.rag_pipeline import RAGPipeline
-import urllib.parse
-
-# Import UserState from commands
-from bot.commands.commands import UserState
+import openai
 
 # Create routers for question handling
 question_router = Router()
@@ -17,12 +15,60 @@ query_router = Router()
 # In-memory storage for pagination (in production, use Redis or database)
 user_pagination_data = {}
 
+async def transcribe_voice_cloud(message: types.Message) -> str:
+    """Transcribe voice message using OpenAI Whisper API"""
+    # Get the file
+    file_id = message.voice.file_id if message.voice else message.audio.file_id
+    file = await message.bot.get_file(file_id)
+    
+    temp_file = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
+            await message.bot.download_file(file.file_path, temp_file.name)
+            
+            # Use OpenAI Whisper API for transcription (v1.0+ syntax)
+            client = openai.AsyncOpenAI()
+            with open(temp_file.name, 'rb') as audio_file:
+                transcript = await client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="ru"
+                )
+            
+            return transcript.text.strip()
+            
+    finally:
+        # Clean up temp file
+        if temp_file and os.path.exists(temp_file.name):
+            os.unlink(temp_file.name)
 
-@question_router.message(F.text)
+
+@question_router.message(F.text | F.voice | F.audio)
 async def handle_user_question(message: types.Message, state: FSMContext, supabase_client):
     """Handle user questions with RAG pipeline"""
-    if not message.text:
-        await message.answer("Пожалуйста, отправьте текстовое сообщение с вашим запросом.")
+    # Extract text from message (text or voice)
+    user_text = None
+    
+    if message.text:
+        user_text = message.text
+    elif message.voice or message.audio:
+        # Show processing message for voice
+        processing_voice_message = await message.answer("🎤 Распознаю голосовое сообщение...")
+        
+        try:
+            user_text = await transcribe_voice_cloud(message)
+            await processing_voice_message.delete()
+            
+            if not user_text or user_text.strip() == "":
+                await message.answer("Не удалось распознать речь. Попробуйте еще раз или отправьте текстовое сообщение.")
+                return
+                
+        except Exception as e:
+            logging.error(f"Error transcribing voice: {e}")
+            await processing_voice_message.edit_text("Ошибка при распознавании голосового сообщения. Попробуйте еще раз.")
+            return
+    else:
+        await message.answer("Пожалуйста, отправьте текстовое или голосовое сообщение с вашим запросом.")
         return
     
     # Show processing message
@@ -47,7 +93,7 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
         # Process question through RAG
         result = await rag.search_and_answer(
             user_id=user['id'],
-            question=message.text
+            question=user_text
         )
         
         if result.get('error'):
@@ -101,103 +147,3 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
         )
 
 
-# Handle regular text messages as questions
-@question_router.message(F.text, ~StateFilter(UserState.help))
-async def handle_regular_message(message: types.Message, state: FSMContext, supabase_client):
-    """Handle regular text messages as questions"""
-    # Set state and redirect to question handler
-    await state.set_state(UserState.help)
-    await handle_user_question(message, state, supabase_client)
-
-
-
-'''
--------------------------------------------------------------------------------------------------------
-from aiogram import types
-from aiogram import F
-from aiogram.enums import ChatAction
-import tempfile
-import os
-import gc
-from faster_whisper import WhisperModel
-from configs.states import UserState
-import platform
-
-# Set OpenMP environment variables before any other imports
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["OMP_NUM_THREADS"] = "1"
-
-# Function to clear memory (OS-specific)
-def clear_memory():
-    gc.collect()
-    if platform.system() == 'Darwin':  # macOS
-        import subprocess
-        subprocess.run(['purge'], capture_output=True)
-    elif platform.system() == 'Linux':  # Linux
-        import ctypes
-        try:
-            ctypes.CDLL('libc.so.6').malloc_trim(0)
-        except:
-            pass
-
-# Initialize the model with more specific parameters
-model = WhisperModel(
-    model_size_or_path="tiny",
-    device="cpu",
-    compute_type="int8",
-    download_root=os.path.expanduser("~/.cache/whisper")  # Use home directory
-)
-
-
-@dp.message(F.voice | F.audio)
-async def handle_audio(message: types.Message) -> None:
-    if model is None:
-        await message.reply("Sorry, voice recognition is currently unavailable.")
-        return
-
-    temp_file = None
-    await message.bot.send_chat_action(
-            chat_id=message.from_user.id, 
-            action=ChatAction.TYPING
-    )
-
-    # Get the file
-    file_id = message.voice.file_id if message.voice else message.audio.file_id
-    file = await message.bot.get_file(file_id)
-        
-    with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
-        await message.bot.download_file(file.file_path, temp_file.name)
-            
-        clear_memory()  # Clear memory before transcription
-                
-        # More conservative transcription settings
-        segments, _ = model.transcribe(
-                temp_file.name,
-                language="ru",
-                beam_size=1,
-                vad_filter=True,
-                vad_parameters=dict(
-                    min_silence_duration_ms=1000,
-                    speech_pad_ms=100
-                ),
-                condition_on_previous_text=False,
-                no_speech_threshold=0.6    
-        )
-                
-        # Combine all segments
-        transcribed_text = " ".join([segment.text for segment in segments]).strip()
-                
-        clear_memory()  # Clear memory after transcription
-
-        # Use the RAG chain to generate a response
-        response, question, chunks = rag_query(transcribed_text)
-
-        # Ensure response is a string
-        if not isinstance(response, str):
-            response = str(response)
-
-        # Send the response back to the user
-        await message.answer(response)
-        db.insert_resquest(message.from_user.id, question, response,  chunks)
-
-'''

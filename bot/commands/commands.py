@@ -48,6 +48,11 @@ async def list_videos(message: types.Message):
     try:
         # Create webapp button
         webapp_url = f"{Config.WEBAPP_URL}/videos"
+        
+        # Log the webapp URL
+        print(f"🎥 Videos command: User {message.from_user.id} ({message.from_user.username}) requesting webapp URL: {webapp_url}")
+        logging.info(f"Videos command: User {message.from_user.id} requesting webapp URL: {webapp_url}")
+        
         webapp_button = InlineKeyboardButton(
             text="🎥 Открыть видео",
             web_app=WebAppInfo(url=webapp_url)
@@ -56,8 +61,7 @@ async def list_videos(message: types.Message):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[webapp_button]])
         
         await message.answer(
-            "🎥 *Видео материалы*\n\n"
-            "Нажмите кнопку ниже, чтобы открыть видео материалы:",
+            "🎥 Нажмите кнопку ниже, чтобы открыть видео материалы:",
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
