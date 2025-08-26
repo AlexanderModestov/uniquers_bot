@@ -3,9 +3,10 @@ import tempfile
 import os
 from aiogram import Router, types, F
 from aiogram.enums import ChatAction
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from bot.services.rag_pipeline import RAGPipeline
+from bot.config import Config
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 import openai
 
 # Create routers for question handling
@@ -111,9 +112,8 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
 
         print('--------------------------------')
         print('result: ', result)
+        print('--------------------------------')
         if result.get('sources'):
-            from bot.config import Config
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
             
             buttons = []
             
@@ -136,7 +136,7 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
                 #similarity = source.get('similarity', 0)
                 print('metadata: ', metadata)
                 print('weburl: ', f"{Config.WEBAPP_URL}/{metadata.get('file_id')}")
-                print('text: ', f"{source_type_icons[content_type]} {title}")
+                print('text: ', f"{source_type_icons[source_type]} {title}")
                 
                 # Add source to text (removed duplicate logging)
                 
