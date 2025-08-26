@@ -255,6 +255,115 @@ async def handle_quiz_actions(callback_query: types.CallbackQuery):
             parse_mode="HTML"
         )
 
+@content_router.callback_query(lambda c: c.data == 'materials_web_app')
+async def handle_materials_web_app(callback_query: types.CallbackQuery):
+    """Handle web app materials selection"""
+    try:
+        webapp_url = f"{Config.WEBAPP_URL}"
+        webapp_button = InlineKeyboardButton(
+            text="🌐 Открыть Web App",
+            web_app=WebAppInfo(url=webapp_url)
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[webapp_button]])
+        
+        await callback_query.message.edit_text(
+            "🌐 <b>Web App</b>\n\n"
+            "Интерактивные материалы и приложения для обучения.\n"
+            "Нажмите кнопку ниже для доступа к веб-приложению:",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error in materials_web_app: {e}")
+        await callback_query.answer("Ошибка при загрузке веб-приложения")
+
+@content_router.callback_query(lambda c: c.data == 'materials_videos')
+async def handle_materials_videos(callback_query: types.CallbackQuery):
+    """Handle videos materials selection"""
+    try:
+        webapp_url = f"{Config.WEBAPP_URL}/videos"
+        webapp_button = InlineKeyboardButton(
+            text="🎥 Открыть видео",
+            web_app=WebAppInfo(url=webapp_url)
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[webapp_button]])
+        
+        await callback_query.message.edit_text(
+            "🎥 <b>Videos</b>\n\n"
+            "Видеоуроки, записи лекций и обучающие материалы.\n"
+            "Нажмите кнопку ниже для просмотра видеоматериалов:",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error in materials_videos: {e}")
+        await callback_query.answer("Ошибка при загрузке видео")
+
+@content_router.callback_query(lambda c: c.data == 'materials_texts')
+async def handle_materials_texts(callback_query: types.CallbackQuery):
+    """Handle texts materials selection"""
+    try:
+        webapp_url = f"{Config.WEBAPP_URL}/texts"
+        webapp_button = InlineKeyboardButton(
+            text="📝 Открыть тексты",
+            web_app=WebAppInfo(url=webapp_url)
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[webapp_button]])
+        
+        await callback_query.message.edit_text(
+            "📝 <b>Texts</b>\n\n"
+            "Статьи, конспекты, учебные материалы и документация.\n"
+            "Нажмите кнопку ниже для доступа к текстовым материалам:",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error in materials_texts: {e}")
+        await callback_query.answer("Ошибка при загрузке текстов")
+
+@content_router.callback_query(lambda c: c.data == 'materials_podcasts')
+async def handle_materials_podcasts(callback_query: types.CallbackQuery):
+    """Handle podcasts materials selection"""
+    try:
+        webapp_url = f"{Config.WEBAPP_URL}/podcasts"
+        webapp_button = InlineKeyboardButton(
+            text="🎧 Открыть подкасты",
+            web_app=WebAppInfo(url=webapp_url)
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[webapp_button]])
+        
+        await callback_query.message.edit_text(
+            "🎧 <b>Podcasts</b>\n\n"
+            "Аудиоматериалы, подкасты и записи обсуждений.\n"
+            "Нажмите кнопку ниже для прослушивания подкастов:",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error in materials_podcasts: {e}")
+        await callback_query.answer("Ошибка при загрузке подкастов")
+
+@content_router.message(Command('materials'))
+async def materials_command(message: types.Message):
+    """Materials command - show content categories"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Web App", callback_data="materials_web_app")],
+        [InlineKeyboardButton(text="🎥 Videos", callback_data="materials_videos")],
+        [InlineKeyboardButton(text="📝 Texts", callback_data="materials_texts")],
+        [InlineKeyboardButton(text="🎧 Podcasts", callback_data="materials_podcasts")]
+    ])
+    
+    await message.answer(
+        "📚 <b>Материалы</b>\n\n"
+        "Выберите тип материалов для изучения:\n\n"
+        "🌐 <b>Web App</b> - интерактивные материалы и приложения\n"
+        "🎥 <b>Videos</b> - видеоуроки и записи\n" 
+        "📝 <b>Texts</b> - статьи и текстовые материалы\n"
+        "🎧 <b>Podcasts</b> - аудиоматериалы и подкасты",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
 @content_router.message(Command('help'))
 async def command_request(message: types.Message, state: FSMContext) -> None:
     """Help command - initiate question asking"""
