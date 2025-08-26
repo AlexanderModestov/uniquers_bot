@@ -128,6 +128,133 @@ async def subscribe_command(message: types.Message):
         parse_mode="HTML"
     )
 
+@content_router.message(Command('settings'))
+async def settings_command(message: types.Message):
+    """Settings command handler"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💬 Выбор формата ответа", callback_data="setting_response_format")],
+        [InlineKeyboardButton(text="🔔 Настройка нотификаций", callback_data="setting_notifications")],
+        [InlineKeyboardButton(text="📝 Прохождение квиза по темам эфира", callback_data="setting_quiz")]
+    ])
+    
+    await message.answer(
+        "⚙️ <b>Настройки</b>\n\nВыберите раздел для настройки:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+@content_router.callback_query(lambda c: c.data == 'setting_response_format')
+async def setting_response_format(callback_query: types.CallbackQuery):
+    """Handle response format setting"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📝 Текстовое сообщение", callback_data="format_text")],
+        [InlineKeyboardButton(text="🎵 Аудио сообщение", callback_data="format_audio")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_settings")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "💬 <b>Выбор формата ответа</b>\n\nВыберите предпочтительный формат для получения ответов:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+@content_router.callback_query(lambda c: c.data == 'setting_notifications')
+async def setting_notifications(callback_query: types.CallbackQuery):
+    """Handle notifications setting"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔔 Включить уведомления", callback_data="notifications_on")],
+        [InlineKeyboardButton(text="🔕 Отключить уведомления", callback_data="notifications_off")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_settings")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "🔔 <b>Настройка нотификаций</b>\n\nНастройте получение уведомлений о новых материалах:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+@content_router.callback_query(lambda c: c.data == 'setting_quiz')
+async def setting_quiz(callback_query: types.CallbackQuery):
+    """Handle quiz setting"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎯 Начать квиз", callback_data="start_quiz")],
+        [InlineKeyboardButton(text="📊 Мои результаты", callback_data="quiz_results")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_settings")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "📝 <b>Прохождение квиза по темам эфира</b>\n\nПроверьте свои знания по темам эфира:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+@content_router.callback_query(lambda c: c.data == 'back_to_settings')
+async def back_to_settings(callback_query: types.CallbackQuery):
+    """Go back to main settings menu"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💬 Выбор формата ответа", callback_data="setting_response_format")],
+        [InlineKeyboardButton(text="🔔 Настройка нотификаций", callback_data="setting_notifications")],
+        [InlineKeyboardButton(text="📝 Прохождение квиза по темам эфира", callback_data="setting_quiz")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "⚙️ <b>Настройки</b>\n\nВыберите раздел для настройки:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+@content_router.callback_query(lambda c: c.data in ['format_text', 'format_audio'])
+async def handle_format_selection(callback_query: types.CallbackQuery, supabase_client):
+    """Handle response format selection"""
+    format_type = "текстовом" if callback_query.data == 'format_text' else "аудио"
+    
+    try:
+        # Here you would save the user preference to database
+        # For now, just confirm the selection
+        await callback_query.message.edit_text(
+            f"✅ Формат ответов изменен на <b>{format_type}</b>\n\n"
+            "Теперь ответы будут приходить в выбранном формате.",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error saving format preference: {e}")
+        await callback_query.answer("Произошла ошибка при сохранении настроек")
+
+@content_router.callback_query(lambda c: c.data in ['notifications_on', 'notifications_off'])
+async def handle_notifications_selection(callback_query: types.CallbackQuery, supabase_client):
+    """Handle notifications setting selection"""
+    status = "включены" if callback_query.data == 'notifications_on' else "отключены"
+    
+    try:
+        # Here you would save the notification preference to database
+        # For now, just confirm the selection
+        await callback_query.message.edit_text(
+            f"✅ Уведомления <b>{status}</b>\n\n"
+            "Настройка сохранена успешно.",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error saving notification preference: {e}")
+        await callback_query.answer("Произошла ошибка при сохранении настроек")
+
+@content_router.callback_query(lambda c: c.data in ['start_quiz', 'quiz_results'])
+async def handle_quiz_actions(callback_query: types.CallbackQuery):
+    """Handle quiz actions"""
+    if callback_query.data == 'start_quiz':
+        await callback_query.message.edit_text(
+            "🎯 <b>Квиз в разработке</b>\n\n"
+            "Функционал квиза по темам эфира скоро будет доступен!\n"
+            "Следите за обновлениями.",
+            parse_mode="HTML"
+        )
+    else:  # quiz_results
+        await callback_query.message.edit_text(
+            "📊 <b>Результаты квиза</b>\n\n"
+            "У вас пока нет результатов квизов.\n"
+            "Пройдите квиз, чтобы увидеть свои достижения!",
+            parse_mode="HTML"
+        )
+
 @content_router.message(Command('help'))
 async def command_request(message: types.Message, state: FSMContext) -> None:
     """Help command - initiate question asking"""

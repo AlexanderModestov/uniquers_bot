@@ -103,45 +103,67 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
             return
         
         # Format response with sources
+        logging.info(f"📋 RAG Step 5: Response Formatting - Processing answer with {len(result.get('sources', []))} sources")
         response_text = result['answer']
         
         # Create webapp buttons for sources
         keyboard = None
+
+        print('--------------------------------')
+        print('result: ', result)
         if result.get('sources'):
             from bot.config import Config
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
             
-            response_text += "\n\n📚 Источники:"
             buttons = []
             
             for i, source in enumerate(result['sources'][:3], 1):  # Limit to 3 sources
-                source_type = "📄" if source['type'] == 'document' else "🎥"
+                # Extract content type from metadata
+                metadata = source.get('metadata', {})
+                content_type = metadata.get('type', 'text')  # Default to 'text' if no type specified
+                
+                # Map content types to emojis
+                source_type_icons = {
+                    'video': '🎥',
+                    'audio': '🎧', 
+                    'text': '📄',
+                    'podcast': '🎙️'
+                }
+                source_type = source_type_icons.get(content_type, '📄')  # Default to document icon
+                
                 source_id = source.get('id', '')
                 title = source['title']
+                #similarity = source.get('similarity', 0)
+                print('metadata: ', metadata)
+                print('weburl: ', f"{Config.WEBAPP_URL}/{metadata.get('file_id')}")
+                print('text: ', f"{source_type_icons[content_type]} {title}")
                 
-                # Add source to text
-                response_text += f"\n{i}. {source_type} {title}"
+                # Add source to text (removed duplicate logging)
                 
                 # Create webapp button for the source
-                webapp_url = f"{Config.WEBAPP_URL}/document/{source_id}"
+                webapp_url = f"{Config.WEBAPP_URL}/{metadata.get('file_id')}"
                 button = InlineKeyboardButton(
-                    text=f"{source_type} {title}",
+                    text=f"{source_type_icons[content_type]} {title}",
                     web_app=WebAppInfo(url=webapp_url)
                 )
                 buttons.append([button])
             
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            logging.info(f"✅ RAG Step 5: Response Formatting - Created {len(buttons)} webapp buttons")
         
         # Send response without markdown to avoid parsing errors
+        logging.info(f"📤 RAG Step 5: Response Formatting - Sending final response (length: {len(response_text)} chars)")
         try:
             await processing_message.edit_text(response_text, reply_markup=keyboard, parse_mode="Markdown")
+            logging.info(f"✅ RAG Step 5: Response Formatting - Successfully sent response with Markdown")
         except Exception as markdown_error:
             # Fallback: send without markdown if parsing fails
-            print(f"Markdown parsing failed, sending as plain text: {markdown_error}")
+            logging.warning(f"⚠️ RAG Step 5: Response Formatting - Markdown parsing failed, sending as plain text: {markdown_error}")
             await processing_message.edit_text(response_text, reply_markup=keyboard)
+            logging.info(f"✅ RAG Step 5: Response Formatting - Successfully sent response as plain text")
         
     except Exception as e:
-        logging.error(f"Error processing question: {e}")
+        logging.error(f"❌ RAG Pipeline: Fatal error processing question for user {message.from_user.id}: {e}")
         await processing_message.edit_text(
             "Произошла ошибка при обработке вашего вопроса. Попробуйте еще раз или обратитесь к администратору."
         )
