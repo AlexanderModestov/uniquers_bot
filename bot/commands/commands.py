@@ -1,4 +1,6 @@
 import logging
+import os
+import json
 from aiogram import Router, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
@@ -42,32 +44,129 @@ async def about(message: types.Message):
         parse_mode="Markdown"
     )
 
-@content_router.message(Command('videos'))
-async def list_videos(message: types.Message):
-    """Open webapp for videos"""
+@content_router.message(Command('materials'))
+async def list_materials(message: types.Message):
+    """Open webapp with all materials and category buttons"""
     try:
-        # Create webapp button
-        webapp_url = f"{Config.WEBAPP_URL}/videos"
+        # Create inline keyboard with category buttons
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📚 Все материалы", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}"))],
+            [InlineKeyboardButton(text="🎥 Видео эфиры", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/videos"))],
+            [InlineKeyboardButton(text="🎙️ Подкасты", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/podcasts"))],
+            [InlineKeyboardButton(text="📄 Статьи", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/texts"))]
+        ])
         
-        # Log the webapp URL
-        print(f"🎥 Videos command: User {message.from_user.id} ({message.from_user.username}) requesting webapp URL: {webapp_url}")
-        logging.info(f"Videos command: User {message.from_user.id} requesting webapp URL: {webapp_url}")
-        
-        webapp_button = InlineKeyboardButton(
-            text="🎥 Открыть видео",
-            web_app=WebAppInfo(url=webapp_url)
-        )
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[webapp_button]])
+        # Log the webapp access
+        print(f"📚 Materials command: User {message.from_user.id} ({message.from_user.username}) accessing materials webapp")
+        logging.info(f"Materials command: User {message.from_user.id} accessing materials webapp")
         
         await message.answer(
-            "🎥 Нажмите кнопку ниже, чтобы открыть видео материалы:",
+            "📚 Здесь вы можете изучить все материалы. Выберите категорию:",
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
     except Exception as e:
-        logging.error(f"Error in list_videos: {e}")
-        await message.answer("Ошибка при загрузке видео.")
+        logging.error(f"Error in list_materials: {e}")
+        await message.answer("Ошибка при загрузке материалов.")
+
+@content_router.message(Command('quiz'))
+async def quiz_command(message: types.Message):
+    """Quiz command - show topic selection with pagination"""
+    try:
+        await show_quiz_topics(message, page=0)
+    except Exception as e:
+        logging.error(f"Error in quiz_command: {e}")
+        await message.answer("Ошибка при загрузке квиза.")
+
+async def show_quiz_topics(message: types.Message, page: int = 0, edit_message: bool = False):
+    """Show quiz topics with pagination"""
+    try:
+        # Load topics from video_descriptions.json
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'video_descriptions.json')
+        if not os.path.exists(config_path):
+            await message.answer("Ошибка: файл с темами не найден.")
+            return
+            
+        with open(config_path, 'r', encoding='utf-8') as f:
+            video_data = json.load(f)
+        
+        topics = video_data.get('videos', {})
+        if not topics:
+            await message.answer("Ошибка: темы не найдены.")
+            return
+        
+        # Exclude "Жить или выживать: разбор" from quiz list
+        filtered_topics = {k: v for k, v in topics.items() if v['name'] != "Жить или выживать: разбор"}
+        topic_items = list(filtered_topics.items())
+        topics_per_page = 5
+        total_pages = (len(topic_items) + topics_per_page - 1) // topics_per_page
+        
+        # Ensure page is within bounds
+        page = max(0, min(page, total_pages - 1))
+        
+        # Get topics for current page
+        start_idx = page * topics_per_page
+        end_idx = start_idx + topics_per_page
+        current_topics = topic_items[start_idx:end_idx]
+        
+        # Create inline buttons for topics (one per row)
+        buttons = []
+        for topic_key, topic_info in current_topics:
+            button = InlineKeyboardButton(
+                text=f"📝 {topic_info['name']}",
+                web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/api/quiz-html/{topic_info['file_id']}")
+            )
+            buttons.append([button])
+        
+        # Add navigation buttons if needed
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton(
+                text="⬅️ Назад",
+                callback_data=f"quiz_page_{page-1}"
+            ))
+        
+        if page < total_pages - 1:
+            nav_buttons.append(InlineKeyboardButton(
+                text="Далее ➡️",
+                callback_data=f"quiz_page_{page+1}"
+            ))
+        
+        if nav_buttons:
+            buttons.append(nav_buttons)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        # Log quiz access
+        if not edit_message:
+            print(f"📝 Quiz command: User {message.from_user.id} ({message.from_user.username}) accessing quiz topics")
+            logging.info(f"Quiz command: User {message.from_user.id} accessing quiz topics")
+        
+        text = (
+            f"📝 *Выберите тему для квиза:*\n\n"
+            f"Пройдите тест по одной из психологических тем эфиров\n\n"
+            f"Страница {page + 1} из {total_pages}"
+        )
+        
+        if edit_message:
+            await message.edit_text(
+                text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        else:
+            await message.answer(
+                text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        
+    except Exception as e:
+        logging.error(f"Error in show_quiz_topics: {e}")
+        if edit_message:
+            await message.edit_text("Ошибка при загрузке квиза.")
+        else:
+            await message.answer("Ошибка при загрузке квиза.")
 
 @content_router.message(Command('booking'))
 async def schedule_command(message: types.Message):
@@ -237,6 +336,23 @@ async def handle_notifications_selection(callback_query: types.CallbackQuery, su
         logging.error(f"Error saving notification preference: {e}")
         await callback_query.answer("Произошла ошибка при сохранении настроек")
 
+@content_router.callback_query(lambda c: c.data.startswith('quiz_page_'))
+async def handle_quiz_pagination(callback_query: types.CallbackQuery):
+    """Handle quiz pagination"""
+    try:
+        # Extract page number from callback data
+        page = int(callback_query.data.replace('quiz_page_', ''))
+        
+        # Show quiz topics for the requested page
+        await show_quiz_topics(callback_query.message, page=page, edit_message=True)
+        
+        # Answer callback query
+        await callback_query.answer()
+        
+    except Exception as e:
+        logging.error(f"Error in handle_quiz_pagination: {e}")
+        await callback_query.answer("Ошибка при навигации по страницам")
+
 @content_router.callback_query(lambda c: c.data in ['start_quiz', 'quiz_results'])
 async def handle_quiz_actions(callback_query: types.CallbackQuery):
     """Handle quiz actions"""
@@ -343,26 +459,6 @@ async def handle_materials_podcasts(callback_query: types.CallbackQuery):
         logging.error(f"Error in materials_podcasts: {e}")
         await callback_query.answer("Ошибка при загрузке подкастов")
 
-@content_router.message(Command('materials'))
-async def materials_command(message: types.Message):
-    """Materials command - show content categories"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🌐 Web App", callback_data="materials_web_app")],
-        [InlineKeyboardButton(text="🎥 Videos", callback_data="materials_videos")],
-        [InlineKeyboardButton(text="📝 Texts", callback_data="materials_texts")],
-        [InlineKeyboardButton(text="🎧 Podcasts", callback_data="materials_podcasts")]
-    ])
-    
-    await message.answer(
-        "📚 <b>Материалы</b>\n\n"
-        "Выберите тип материалов для изучения:\n\n"
-        "🌐 <b>Web App</b> - интерактивные материалы и приложения\n"
-        "🎥 <b>Videos</b> - видеоуроки и записи\n" 
-        "📝 <b>Texts</b> - статьи и текстовые материалы\n"
-        "🎧 <b>Podcasts</b> - аудиоматериалы и подкасты",
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
 
 @content_router.message(Command('help'))
 async def command_request(message: types.Message, state: FSMContext) -> None:

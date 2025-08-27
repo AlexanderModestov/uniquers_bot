@@ -1,6 +1,7 @@
 import logging
 import tempfile
 import os
+import json
 from aiogram import Router, types, F
 from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
@@ -12,6 +13,41 @@ import openai
 # Create routers for question handling
 question_router = Router()
 query_router = Router()
+
+def get_proper_title(content_type, original_title):
+    """Get proper title from config files based on content type and original title"""
+    try:
+        # Map content_type to config file
+        config_files = {
+            'text': 'text_descriptions.json',
+            'video': 'video_descriptions.json', 
+            'podcast': 'podcast_descriptions.json',
+            'audio': 'podcast_descriptions.json',  # Use podcast config for audio
+            'url': 'url_descriptions.json'
+        }
+        
+        config_file = config_files.get(content_type)
+        if not config_file:
+            return original_title
+            
+        # Load config file
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', config_file)
+        if not os.path.exists(config_path):
+            return original_title
+            
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+            
+        # Find matching entry in config
+        content_key = 'texts' if content_type == 'text' else 'videos'
+        if content_key in config_data and original_title in config_data[content_key]:
+            return config_data[content_key][original_title]['name']
+            
+        return original_title
+        
+    except Exception as e:
+        logging.warning(f"Error getting proper title: {e}")
+        return original_title
 
 # In-memory storage for pagination (in production, use Redis or database)
 user_pagination_data = {}
@@ -110,40 +146,93 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
         # Create webapp buttons for sources
         keyboard = None
 
-        print('--------------------------------')
-        print('result: ', result)
-        print('--------------------------------')
         if result.get('sources'):
             
             buttons = []
+
+            # Map content types to emojis
+            source_type_icons = {
+                'video': '🎥',
+                'audio': '🎧', 
+                'text': '📄',
+                'podcast': '🎙️'
+            }
             
-            for i, source in enumerate(result['sources'][:3], 1):  # Limit to 3 sources
+            # Remove duplicates based on title, keep first occurrence, exclude audio type
+            seen_titles = set()
+            unique_sources = []
+            for source in result['sources']:
+                title = source.get('title', '')
+                source_type = source.get('type', '')
+                if title not in seen_titles and source_type != 'audio':
+                    seen_titles.add(title)
+                    unique_sources.append(source)
+            
+            for i, source in enumerate(unique_sources[:3], 1):  # Limit to 3 sources
                 # Extract content type from metadata
-                metadata = source.get('metadata', {})
-                content_type = metadata.get('type', 'text')  # Default to 'text' if no type specified
+                content_type = source.get('type')  # Default to 'text' if no type specified
+                source_type = source_type_icons.get(content_type)  # Default to document icon
                 
-                # Map content types to emojis
-                source_type_icons = {
-                    'video': '🎥',
-                    'audio': '🎧', 
-                    'text': '📄',
-                    'podcast': '🎙️'
-                }
-                source_type = source_type_icons.get(content_type, '📄')  # Default to document icon
-                
-                source_id = source.get('id', '')
-                title = source['title']
-                #similarity = source.get('similarity', 0)
-                print('metadata: ', metadata)
-                print('weburl: ', f"{Config.WEBAPP_URL}/{metadata.get('file_id')}")
-                print('text: ', f"{source_type_icons[source_type]} {title}")
+                # Get proper title from config files
+                original_title = source['title']
+                proper_title = get_proper_title(content_type, original_title)
                 
                 # Add source to text (removed duplicate logging)
                 
-                # Create webapp button for the source
-                webapp_url = f"{Config.WEBAPP_URL}/{metadata.get('file_id')}"
+                # Create webapp button for the source based on content type
+                if content_type == 'video':
+                    # For video: get file_id from config and use name as text
+                    config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'video_descriptions.json')
+                    if os.path.exists(config_path):
+                        with open(config_path, 'r', encoding='utf-8') as f:
+                            video_config = json.load(f)
+                        # Find matching video by title (remove .txt if present)
+                        title_key = original_title.replace('.txt', '')
+                        if title_key in video_config.get('videos', {}):
+                            video_data = video_config['videos'][title_key]
+                            proper_title = video_data['name']
+                            webapp_url = f"{Config.WEBAPP_URL}/{video_data['file_id']}"
+                        else:
+                            webapp_url = f"{Config.WEBAPP_URL}/{content_type}s"
+                    else:
+                        webapp_url = f"{Config.WEBAPP_URL}/{content_type}s"
+                elif content_type == 'podcast' or content_type == 'audio':
+                    # For podcast: get file_id from config and use name as text
+                    config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'podcast_descriptions.json')
+                    if os.path.exists(config_path):
+                        with open(config_path, 'r', encoding='utf-8') as f:
+                            podcast_config = json.load(f)
+                        # Find matching podcast by title (remove .txt if present)
+                        title_key = original_title.replace('.txt', '')
+                        if title_key in podcast_config.get('videos', {}):  # Note: podcast config uses 'videos' key
+                            podcast_data = podcast_config['videos'][title_key]
+                            proper_title = podcast_data['name']
+                            webapp_url = f"{Config.WEBAPP_URL}/{podcast_data['file_id']}"
+                        else:
+                            webapp_url = f"{Config.WEBAPP_URL}/{content_type}s"
+                    else:
+                        webapp_url = f"{Config.WEBAPP_URL}/{content_type}s"
+                elif content_type == 'text':
+                    # For text: get file_id from config and use name as text, URL format is different
+                    config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'text_descriptions.json')
+                    if os.path.exists(config_path):
+                        with open(config_path, 'r', encoding='utf-8') as f:
+                            text_config = json.load(f)
+                        # Find matching text by title (remove .txt if present)
+                        title_key = original_title.replace('.txt', '')
+                        if title_key in text_config.get('texts', {}):
+                            text_data = text_config['texts'][title_key]
+                            proper_title = text_data['name']
+                            webapp_url = f"{Config.WEBAPP_URL}/texts/{text_data['file_id']}"
+                        else:
+                            webapp_url = f"{Config.WEBAPP_URL}/{content_type}s"
+                    else:
+                        webapp_url = f"{Config.WEBAPP_URL}/{content_type}s"
+                else:
+                    webapp_url = f"{Config.WEBAPP_URL}/{content_type}s"
+
                 button = InlineKeyboardButton(
-                    text=f"{source_type_icons[content_type]} {title}",
+                    text=f"{source_type_icons[content_type]} {proper_title}",
                     web_app=WebAppInfo(url=webapp_url)
                 )
                 buttons.append([button])
