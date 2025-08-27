@@ -232,8 +232,7 @@ async def settings_command(message: types.Message):
     """Settings command handler"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💬 Выбор формата ответа", callback_data="setting_response_format")],
-        [InlineKeyboardButton(text="🔔 Настройка нотификаций", callback_data="setting_notifications")],
-        [InlineKeyboardButton(text="📝 Прохождение квиза по темам эфира", callback_data="setting_quiz")]
+        [InlineKeyboardButton(text="🔔 Настройка нотификаций", callback_data="setting_notifications")]
     ])
     
     await message.answer(
