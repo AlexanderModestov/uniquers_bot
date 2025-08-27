@@ -52,7 +52,7 @@ async def list_materials(message: types.Message):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📚 Все материалы", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}"))],
             [InlineKeyboardButton(text="🎥 Видео эфиры", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/videos"))],
-            [InlineKeyboardButton(text="🎙️ Подкасты", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/podcasts"))],
+            #[InlineKeyboardButton(text="🎙️ Подкасты", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/podcasts"))],
             [InlineKeyboardButton(text="📄 Статьи", web_app=WebAppInfo(url=f"{Config.WEBAPP_URL}/texts"))]
         ])
         
