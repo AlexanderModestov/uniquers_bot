@@ -2,12 +2,14 @@ import logging
 import tempfile
 import os
 import json
+import time
 from aiogram import Router, types, F
 from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
 from bot.services.rag_pipeline import RAGPipeline
+from bot.services.elevenlabs import TextToSpeechService
 from bot.config import Config
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, FSInputFile
 import openai
 
 # Create routers for question handling
@@ -129,7 +131,7 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
         
         # Process question through RAG
         result = await rag.search_and_answer(
-            user_id=user['id'],
+            user_id=user.id,
             question=user_text
         )
         
@@ -240,7 +242,52 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             logging.info(f"✅ RAG Step 5: Response Formatting - Created {len(buttons)} webapp buttons")
         
-        # Send response without markdown to avoid parsing errors
+        # Check if user prefers audio responses
+        if user.isAudio:
+            try:
+                # Generate audio using ElevenLabs
+                logging.info(f"🎧 Generating audio response for user {message.from_user.id}")
+                tts_service = TextToSpeechService()
+                
+                # Generate audio file
+                audio_path = tts_service.text_to_speech(
+                    text=response_text,
+                    quality_preset="conversational",  # Good for bot responses
+                    output_filename=f"response_{message.from_user.id}_{int(time.time())}.mp3"
+                )
+                
+                # Send audio file
+                audio_file = FSInputFile(audio_path)
+                await processing_message.delete()  # Delete processing message
+                
+                if keyboard:
+                    # Send audio with sources buttons
+                    await message.answer_audio(
+                        audio=audio_file,
+                        reply_markup=keyboard,
+                        caption="🎧 Аудиоответ"
+                    )
+                else:
+                    # Send audio without buttons
+                    await message.answer_audio(
+                        audio=audio_file,
+                        caption="🎧 Аудиоответ"
+                    )
+                
+                # Clean up audio file
+                try:
+                    os.unlink(audio_path)
+                except OSError:
+                    pass  # File cleanup failed, but not critical
+                
+                logging.info(f"✅ Successfully sent audio response to user {message.from_user.id}")
+                return
+                
+            except Exception as audio_error:
+                logging.error(f"⚠️ Audio generation failed, falling back to text: {audio_error}")
+                # Fall back to text response if audio generation fails
+        
+        # Send text response (either user prefers text or audio generation failed)
         logging.info(f"📤 RAG Step 5: Response Formatting - Sending final response (length: {len(response_text)} chars)")
         try:
             await processing_message.edit_text(response_text, reply_markup=keyboard, parse_mode="Markdown")
