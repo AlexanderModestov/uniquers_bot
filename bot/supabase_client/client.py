@@ -7,11 +7,11 @@ class SupabaseClient:
     def __init__(self, supabase_url: str, supabase_key: str):
         self.client: Client = create_client(supabase_url, supabase_key)
     
-    async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[Dict]:
+    async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[User]:
         try:
             response = self.client.table('users').select('*').eq('telegram_id', telegram_id).execute()
             if response.data:
-                return response.data[0]
+                return User(**response.data[0])
             return None
         except Exception as e:
             print(f"Error getting user: {e}")

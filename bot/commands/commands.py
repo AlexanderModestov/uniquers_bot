@@ -228,49 +228,61 @@ async def subscribe_command(message: types.Message):
     )
 
 @content_router.message(Command('settings'))
-async def settings_command(message: types.Message):
+async def settings_command(message: types.Message, supabase_client):
     """Settings command handler"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💬 Выбор формата ответа", callback_data="setting_response_format")],
-        [InlineKeyboardButton(text="🔔 Настройка нотификаций", callback_data="setting_notifications")],
-        [InlineKeyboardButton(text="📝 Прохождение квиза по темам эфира", callback_data="setting_quiz")]
-    ])
-    
-    await message.answer(
-        "⚙️ <b>Настройки</b>\n\nВыберите раздел для настройки:",
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
+    try:
+        # Get current user settings from database
+        user = await supabase_client.get_user_by_telegram_id(message.from_user.id)
+        
+        if user:
+            audio_status = "🔊 Аудио" if user.isAudio else "📝 Текст"
+            notif_status = "🔔 Включены" if user.notification else "🔕 Отключены"
+            
+            # Dynamic buttons based on current settings
+            if user.isAudio:
+                format_button_text = "📝 Выбрать текстовые ответы"
+                format_callback = "format_text"
+            else:
+                format_button_text = "🎧 Выбрать аудиоответы"
+                format_callback = "format_audio"
+            
+            if user.notification:
+                notif_button_text = "🔕 Отключить уведомления"
+                notif_callback = "notifications_off"
+            else:
+                notif_button_text = "🔔 Включить уведомления"
+                notif_callback = "notifications_on"
+        else:
+            audio_status = "📝 Текст"
+            notif_status = "🔕 Отключены"
+            format_button_text = "🎧 Выбрать аудиоответы"
+            format_callback = "format_audio"
+            notif_button_text = "🔔 Включить уведомления"
+            notif_callback = "notifications_on"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=format_button_text, callback_data=format_callback)],
+            [InlineKeyboardButton(text=notif_button_text, callback_data=notif_callback)]
+        ])
+        
+        settings_text = (
+            "⚙️ <b>Настройки</b>\n\n"
+            "<b>Текущие настройки:</b>\n"
+            f"💬 Формат ответов: {audio_status}\n"
+            f"🔔 Уведомления: {notif_status}\n\n"
+            "Выберите действие:"
+        )
+        
+        await message.answer(
+            settings_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Error in settings command: {e}")
+        await message.answer("Произошла ошибка при загрузке настроек")
 
-@content_router.callback_query(lambda c: c.data == 'setting_response_format')
-async def setting_response_format(callback_query: types.CallbackQuery):
-    """Handle response format setting"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📝 Текстовое сообщение", callback_data="format_text")],
-        [InlineKeyboardButton(text="🎵 Аудио сообщение", callback_data="format_audio")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_settings")]
-    ])
-    
-    await callback_query.message.edit_text(
-        "💬 <b>Выбор формата ответа</b>\n\nВыберите предпочтительный формат для получения ответов:",
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
 
-@content_router.callback_query(lambda c: c.data == 'setting_notifications')
-async def setting_notifications(callback_query: types.CallbackQuery):
-    """Handle notifications setting"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔔 Включить уведомления", callback_data="notifications_on")],
-        [InlineKeyboardButton(text="🔕 Отключить уведомления", callback_data="notifications_off")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_settings")]
-    ])
-    
-    await callback_query.message.edit_text(
-        "🔔 <b>Настройка нотификаций</b>\n\nНастройте получение уведомлений о новых материалах:",
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
 
 @content_router.callback_query(lambda c: c.data == 'setting_quiz')
 async def setting_quiz(callback_query: types.CallbackQuery):
@@ -288,33 +300,89 @@ async def setting_quiz(callback_query: types.CallbackQuery):
     )
 
 @content_router.callback_query(lambda c: c.data == 'back_to_settings')
-async def back_to_settings(callback_query: types.CallbackQuery):
+async def back_to_settings(callback_query: types.CallbackQuery, supabase_client):
     """Go back to main settings menu"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💬 Выбор формата ответа", callback_data="setting_response_format")],
-        [InlineKeyboardButton(text="🔔 Настройка нотификаций", callback_data="setting_notifications")],
-        [InlineKeyboardButton(text="📝 Прохождение квиза по темам эфира", callback_data="setting_quiz")]
-    ])
-    
-    await callback_query.message.edit_text(
-        "⚙️ <b>Настройки</b>\n\nВыберите раздел для настройки:",
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
+    try:
+        # Get current user settings from database
+        user = await supabase_client.get_user_by_telegram_id(callback_query.from_user.id)
+        
+        if user:
+            audio_status = "🔊 Аудио" if user.isAudio else "📝 Текст"
+            notif_status = "🔔 Включены" if user.notification else "🔕 Отключены"
+            
+            # Dynamic buttons based on current settings
+            if user.isAudio:
+                format_button_text = "📝 Выбрать текстовые ответы"
+                format_callback = "format_text"
+            else:
+                format_button_text = "🎧 Выбрать аудиоответы"
+                format_callback = "format_audio"
+            
+            if user.notification:
+                notif_button_text = "🔕 Отключить уведомления"
+                notif_callback = "notifications_off"
+            else:
+                notif_button_text = "🔔 Включить уведомления"
+                notif_callback = "notifications_on"
+        else:
+            audio_status = "📝 Текст"
+            notif_status = "🔕 Отключены"
+            format_button_text = "🎧 Выбрать аудиоответы"
+            format_callback = "format_audio"
+            notif_button_text = "🔔 Включить уведомления"
+            notif_callback = "notifications_on"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=format_button_text, callback_data=format_callback)],
+            [InlineKeyboardButton(text=notif_button_text, callback_data=notif_callback)]
+        ])
+        
+        settings_text = (
+            "⚙️ <b>Настройки</b>\n\n"
+            "<b>Текущие настройки:</b>\n"
+            f"💬 Формат ответов: {audio_status}\n"
+            f"🔔 Уведомления: {notif_status}\n\n"
+            "Выберите действие:"
+        )
+        
+        try:
+            await callback_query.message.edit_text(
+                settings_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as edit_error:
+            # Handle case when message content is the same (Telegram error)
+            if "message is not modified" in str(edit_error):
+                # Message content is identical, just acknowledge the callback
+                pass
+            else:
+                # Re-raise other errors
+                raise edit_error
+    except Exception as e:
+        logging.error(f"Error in back_to_settings: {e}")
+        await callback_query.answer("Произошла ошибка при загрузке настроек")
 
 @content_router.callback_query(lambda c: c.data in ['format_text', 'format_audio'])
 async def handle_format_selection(callback_query: types.CallbackQuery, supabase_client):
     """Handle response format selection"""
-    format_type = "текстовом" if callback_query.data == 'format_text' else "аудио"
+    is_audio = callback_query.data == 'format_audio'
+    format_type = "аудио" if is_audio else "текстовом"
     
     try:
-        # Here you would save the user preference to database
-        # For now, just confirm the selection
-        await callback_query.message.edit_text(
-            f"✅ Формат ответов изменен на <b>{format_type}</b>\n\n"
-            "Теперь ответы будут приходить в выбранном формате.",
-            parse_mode="HTML"
-        )
+        # Save user preference to database
+        user_data = {
+            'telegram_id': callback_query.from_user.id,
+            'isAudio': is_audio
+        }
+        
+        await supabase_client.create_or_update_user(user_data)
+        
+        # Show brief confirmation and redirect back to settings
+        await callback_query.answer(f"✅ Формат изменен на {format_type}")
+        
+        # Redirect back to settings menu
+        await back_to_settings(callback_query, supabase_client)
     except Exception as e:
         logging.error(f"Error saving format preference: {e}")
         await callback_query.answer("Произошла ошибка при сохранении настроек")
@@ -322,16 +390,23 @@ async def handle_format_selection(callback_query: types.CallbackQuery, supabase_
 @content_router.callback_query(lambda c: c.data in ['notifications_on', 'notifications_off'])
 async def handle_notifications_selection(callback_query: types.CallbackQuery, supabase_client):
     """Handle notifications setting selection"""
-    status = "включены" if callback_query.data == 'notifications_on' else "отключены"
+    notifications_enabled = callback_query.data == 'notifications_on'
+    status = "включены" if notifications_enabled else "отключены"
     
     try:
-        # Here you would save the notification preference to database
-        # For now, just confirm the selection
-        await callback_query.message.edit_text(
-            f"✅ Уведомления <b>{status}</b>\n\n"
-            "Настройка сохранена успешно.",
-            parse_mode="HTML"
-        )
+        # Save notification preference to database
+        user_data = {
+            'telegram_id': callback_query.from_user.id,
+            'notification': notifications_enabled
+        }
+        
+        await supabase_client.create_or_update_user(user_data)
+        
+        # Show brief confirmation and redirect back to settings
+        await callback_query.answer(f"✅ Уведомления {status}")
+        
+        # Redirect back to settings menu
+        await back_to_settings(callback_query, supabase_client)
     except Exception as e:
         logging.error(f"Error saving notification preference: {e}")
         await callback_query.answer("Произошла ошибка при сохранении настроек")

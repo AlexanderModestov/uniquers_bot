@@ -12,49 +12,6 @@ CREATE TABLE users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Documents table
-CREATE TABLE documents (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(500) NOT NULL,
-    content_type VARCHAR(100) NOT NULL,
-    file_path VARCHAR(1000),
-    content_text TEXT NOT NULL,
-    embedding vector(1536), -- OpenAI embedding dimension
-    is_favorite BOOLEAN DEFAULT FALSE,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Video contents table
-CREATE TABLE video_contents (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(500) NOT NULL,
-    video_url VARCHAR(1000),
-    transcript TEXT NOT NULL,
-    duration INTEGER,
-    language VARCHAR(10) DEFAULT 'en',
-    embedding vector(1536), -- OpenAI embedding dimension
-    is_favorite BOOLEAN DEFAULT FALSE,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Query history table
-CREATE TABLE query_history (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    question TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    sources JSONB DEFAULT '[]',
-    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- User messages for admin forwarding
 CREATE TABLE user_messages (
     id SERIAL PRIMARY KEY,
