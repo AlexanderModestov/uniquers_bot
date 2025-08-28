@@ -9,6 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from datetime import datetime, timedelta
 from bot.messages import Messages
 from bot.config import Config
+from bot.services.notification_scheduler import NotificationScheduler
 
 # States for FSM
 class UserState(StatesGroup):
@@ -391,25 +392,204 @@ async def handle_format_selection(callback_query: types.CallbackQuery, supabase_
 async def handle_notifications_selection(callback_query: types.CallbackQuery, supabase_client):
     """Handle notifications setting selection"""
     notifications_enabled = callback_query.data == 'notifications_on'
-    status = "включены" if notifications_enabled else "отключены"
     
     try:
-        # Save notification preference to database
-        user_data = {
-            'telegram_id': callback_query.from_user.id,
-            'notification': notifications_enabled
-        }
-        
-        await supabase_client.create_or_update_user(user_data)
-        
-        # Show brief confirmation and redirect back to settings
-        await callback_query.answer(f"✅ Уведомления {status}")
-        
-        # Redirect back to settings menu
-        await back_to_settings(callback_query, supabase_client)
+        if notifications_enabled:
+            # Show notification frequency options when enabling notifications
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📅 Каждый день", callback_data="notif_freq_daily")],
+                [InlineKeyboardButton(text="💼 Только рабочие дни", callback_data="notif_freq_weekdays")],
+                [InlineKeyboardButton(text="🏖️ Только выходные", callback_data="notif_freq_weekends")],
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_settings")]
+            ])
+            
+            await callback_query.message.edit_text(
+                "🔔 <b>Настройка уведомлений</b>\n\n"
+                "Выберите частоту получения уведомлений:",
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        else:
+            # Disable notifications completely
+            user_data = {
+                'telegram_id': callback_query.from_user.id,
+                'notification': False
+            }
+            
+            await supabase_client.create_or_update_user(user_data)
+            
+            # Clear notification settings
+            user = await supabase_client.get_user_by_telegram_id(callback_query.from_user.id)
+            if user:
+                await supabase_client.create_or_update_notification_settings(user.id, {})
+            
+            await callback_query.answer("✅ Уведомления отключены")
+            await back_to_settings(callback_query, supabase_client)
+            
     except Exception as e:
         logging.error(f"Error saving notification preference: {e}")
         await callback_query.answer("Произошла ошибка при сохранении настроек")
+
+@content_router.callback_query(lambda c: c.data.startswith('notif_freq_'))
+async def handle_notification_frequency_selection(callback_query: types.CallbackQuery, supabase_client):
+    """Handle notification frequency selection"""
+    try:
+        user = await supabase_client.get_user_by_telegram_id(callback_query.from_user.id)
+        if not user:
+            await callback_query.answer("Ошибка: пользователь не найден")
+            return
+            
+        # Enable notifications in user table
+        user_data = {
+            'telegram_id': callback_query.from_user.id,
+            'notification': True
+        }
+        await supabase_client.create_or_update_user(user_data)
+        
+        # Parse selected frequency
+        frequency_map = {
+            'notif_freq_daily': ('daily', 'каждый день'),
+            'notif_freq_weekdays': ('weekdays', 'только рабочие дни'),
+            'notif_freq_weekends': ('weekends', 'только выходные')
+        }
+        
+        if callback_query.data in frequency_map:
+            frequency_key, frequency_name = frequency_map[callback_query.data]
+            
+            # Show time selection with all 24 hours - first page (00-11)
+            await show_time_selection(callback_query, frequency_key, frequency_name, page=0)
+        else:
+            await callback_query.answer("❌ Неизвестная частота уведомлений")
+        
+    except Exception as e:
+        logging.error(f"Error saving notification frequency: {e}")
+        await callback_query.answer("Произошла ошибка при сохранении настроек")
+
+async def show_time_selection(callback_query: types.CallbackQuery, frequency_key: str, frequency_name: str, page: int = 0):
+    """Show time selection with pagination (12 hours per page)"""
+    try:
+        hours_per_page = 12
+        total_pages = 2  # 0-11 and 12-23
+        
+        # Ensure page is within bounds
+        page = max(0, min(page, total_pages - 1))
+        
+        # Get hours for current page
+        start_hour = page * hours_per_page
+        end_hour = start_hour + hours_per_page
+        
+        # Create time buttons (3 per row)
+        buttons = []
+        current_row = []
+        
+        for hour in range(start_hour, end_hour):
+            hour_text = f"{hour:02d}:00"
+            button = InlineKeyboardButton(
+                text=hour_text,
+                callback_data=f"notif_time_{frequency_key}_{hour:02d}:00"
+            )
+            current_row.append(button)
+            
+            # Add 3 buttons per row
+            if len(current_row) == 3:
+                buttons.append(current_row)
+                current_row = []
+        
+        # Add remaining buttons if any
+        if current_row:
+            buttons.append(current_row)
+        
+        # Add navigation buttons
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton(
+                text="⬅️ Предыдущие",
+                callback_data=f"time_page_{frequency_key}_{frequency_name}_{page-1}"
+            ))
+        
+        if page < total_pages - 1:
+            nav_buttons.append(InlineKeyboardButton(
+                text="Следующие ➡️",
+                callback_data=f"time_page_{frequency_key}_{frequency_name}_{page+1}"
+            ))
+        
+        if nav_buttons:
+            buttons.append(nav_buttons)
+        
+        # Add back button
+        buttons.append([InlineKeyboardButton(text="⬅️ Назад к частоте", callback_data="notifications_on")])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        page_info = f"({start_hour:02d}:00 - {end_hour-1:02d}:00)" if end_hour <= 24 else f"({start_hour:02d}:00 - 23:00)"
+        
+        await callback_query.message.edit_text(
+            f"🕐 <b>Выбор времени уведомлений</b>\n\n"
+            f"Частота: {frequency_name}\n"
+            f"Выберите час {page_info}:",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+    except Exception as e:
+        logging.error(f"Error in show_time_selection: {e}")
+        await callback_query.message.edit_text("Ошибка при отображении времени")
+
+@content_router.callback_query(lambda c: c.data.startswith('time_page_'))
+async def handle_time_page_navigation(callback_query: types.CallbackQuery):
+    """Handle time selection pagination"""
+    try:
+        # Parse callback data: time_page_{frequency_key}_{frequency_name}_{page}
+        parts = callback_query.data.split('_', 4)
+        if len(parts) >= 5:
+            frequency_key = parts[2]
+            frequency_name = parts[3]
+            page = int(parts[4])
+            
+            await show_time_selection(callback_query, frequency_key, frequency_name, page)
+            await callback_query.answer()
+        
+    except Exception as e:
+        logging.error(f"Error in time page navigation: {e}")
+        await callback_query.answer("Ошибка при навигации")
+
+@content_router.callback_query(lambda c: c.data.startswith('notif_time_'))
+async def handle_notification_time_selection(callback_query: types.CallbackQuery, supabase_client):
+    """Handle final notification time selection"""
+    try:
+        # Parse callback data: notif_time_{frequency}_{time}
+        parts = callback_query.data.split('_', 3)
+        if len(parts) >= 4:
+            frequency = parts[2]
+            time = parts[3]
+            
+            user = await supabase_client.get_user_by_telegram_id(callback_query.from_user.id)
+            if not user:
+                await callback_query.answer("Ошибка: пользователь не найден")
+                return
+            
+            # Save complete notification settings
+            notification_settings = {
+                'frequency': frequency,
+                'time': time
+            }
+            
+            await supabase_client.create_or_update_notification_settings(user.id, notification_settings)
+            
+            # Show confirmation
+            frequency_names = {
+                'daily': 'каждый день',
+                'weekdays': 'рабочие дни',
+                'weekends': 'выходные'
+            }
+            frequency_name = frequency_names.get(frequency, frequency)
+            
+            await callback_query.answer(f"✅ Уведомления настроены: {frequency_name} в {time}")
+            await back_to_settings(callback_query, supabase_client)
+        
+    except Exception as e:
+        logging.error(f"Error saving notification time: {e}")
+        await callback_query.answer("Произошла ошибка при сохранении времени")
 
 @content_router.callback_query(lambda c: c.data.startswith('quiz_page_'))
 async def handle_quiz_pagination(callback_query: types.CallbackQuery):
@@ -559,3 +739,69 @@ async def help(message: types.Message, state: FSMContext):
             )
         except Exception as e:
             logging.error(f"Error sending message to admin: {e}")
+
+@content_router.message(Command('test_notification'))
+async def test_notification_command(message: types.Message, supabase_client):
+    """Test notification command - for admin use"""
+    try:
+        scheduler = NotificationScheduler(message.bot, supabase_client)
+        success = await scheduler.send_test_notification(message.from_user.id)
+        
+        if success:
+            await message.answer("✅ Тестовое уведомление отправлено!")
+        else:
+            await message.answer("❌ Ошибка при отправке тестового уведомления")
+            
+    except Exception as e:
+        logging.error(f"Error in test notification: {e}")
+        await message.answer("❌ Произошла ошибка")
+
+@content_router.message(Command('send_notifications'))
+async def manual_send_notifications_command(message: types.Message, supabase_client):
+    """Manual notification sending command - for admin use"""
+    try:
+        scheduler = NotificationScheduler(message.bot, supabase_client)
+        result = await scheduler.send_notifications_now()
+        
+        if result['status'] == 'completed':
+            await message.answer(
+                f"✅ Уведомления отправлены!\n\n"
+                f"📊 Статистика:\n"
+                f"• Успешно: {result['users_notified']}\n"
+                f"• Ошибки: {result['failed_notifications']}\n"
+                f"• Всего пользователей: {result['total_users']}\n"
+                f"• Время: {result['time']}\n"
+                f"• День недели: {result['weekday']}"
+            )
+        elif result['status'] == 'success':
+            await message.answer(f"ℹ️ {result['message']}")
+        else:
+            await message.answer(f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}")
+            
+    except Exception as e:
+        logging.error(f"Error in manual send notifications: {e}")
+        await message.answer("❌ Произошла ошибка при отправке уведомлений")
+
+@content_router.message(Command('notification_status'))
+async def notification_status_command(message: types.Message, supabase_client):
+    """Check notification system status - for admin use"""
+    try:
+        scheduler = NotificationScheduler(message.bot, supabase_client)
+        status = await scheduler.get_notification_status()
+        
+        if 'error' in status:
+            await message.answer(f"❌ Ошибка: {status['error']}")
+        else:
+            await message.answer(
+                f"📊 <b>Статус системы уведомлений</b>\n\n"
+                f"🕐 Текущее время: {status['current_time']}\n"
+                f"📅 День недели: {status['current_weekday']}\n"
+                f"👥 Пользователей с уведомлениями: {status['total_users_with_notifications']}\n"
+                f"⏰ Запланировано сейчас: {status['users_scheduled_now']}\n"
+                f"🔄 Планировщик работает: {'Да' if status['scheduler_running'] else 'Нет'}",
+                parse_mode="HTML"
+            )
+            
+    except Exception as e:
+        logging.error(f"Error in notification status: {e}")
+        await message.answer("❌ Произошла ошибка при получении статуса")

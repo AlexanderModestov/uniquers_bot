@@ -24,14 +24,18 @@ CREATE TABLE user_messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Notification settings table
+CREATE TABLE notification_settings (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    settings JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_users_telegram_id ON users(telegram_id);
-CREATE INDEX idx_documents_user_id ON documents(user_id);
-CREATE INDEX idx_documents_embedding ON documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_video_contents_user_id ON video_contents(user_id);
-CREATE INDEX idx_video_contents_embedding ON video_contents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_query_history_user_id ON query_history(user_id);
-CREATE INDEX idx_user_messages_user_id ON user_messages(user_id);
+CREATE INDEX idx_notification_settings_user_id ON notification_settings(user_id);
 
 -- Function to search documents by similarity
 CREATE OR REPLACE FUNCTION search_documents(
@@ -114,3 +118,4 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_documents_updated_at BEFORE UPDATE ON documents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_video_contents_updated_at BEFORE UPDATE ON video_contents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_notification_settings_updated_at BEFORE UPDATE ON notification_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

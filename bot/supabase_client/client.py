@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Optional, Dict, Any
 from supabase import create_client, Client
-from .models import User
+from .models import User, NotificationSettings
 
 class SupabaseClient:
     def __init__(self, supabase_url: str, supabase_key: str):
@@ -243,3 +243,80 @@ class SupabaseClient:
         except Exception as e:
             print(f"Error creating user: {e}")
             return None
+    
+    async def get_notification_settings(self, user_id: int) -> Optional[NotificationSettings]:
+        """Get notification settings for a user"""
+        try:
+            response = self.client.table('notification_settings').select('*').eq('user_id', user_id).execute()
+            if response.data:
+                return NotificationSettings(**response.data[0])
+            return None
+        except Exception as e:
+            print(f"Error getting notification settings: {e}")
+            return None
+    
+    async def create_or_update_notification_settings(self, user_id: int, settings: Dict[str, Any]) -> Optional[NotificationSettings]:
+        """Create or update notification settings for a user"""
+        try:
+            existing_settings = await self.get_notification_settings(user_id)
+            
+            settings_data = {
+                'user_id': user_id,
+                'settings': settings
+            }
+            
+            if existing_settings:
+                response = self.client.table('notification_settings').update(settings_data).eq('user_id', user_id).execute()
+            else:
+                response = self.client.table('notification_settings').insert(settings_data).execute()
+            
+            if response.data:
+                return NotificationSettings(**response.data[0])
+            return None
+        except Exception as e:
+            print(f"Error creating/updating notification settings: {e}")
+            return None
+    
+    async def get_users_for_notification(self, current_time: str, current_weekday: str) -> List[Dict[str, Any]]:
+        """Get users who should receive notifications at current time and day"""
+        try:
+            # Get users with notifications enabled
+            users_response = self.client.table('users').select('id, telegram_id, username').eq('notification', True).execute()
+            
+            if not users_response.data:
+                return []
+            
+            users_to_notify = []
+            
+            for user in users_response.data:
+                # Get user's notification settings
+                settings_response = self.client.table('notification_settings').select('settings').eq('user_id', user['id']).execute()
+                
+                if settings_response.data:
+                    settings = settings_response.data[0]['settings']
+                    user_time = settings.get('time')
+                    user_frequency = settings.get('frequency')
+                    
+                    # Check if notification should be sent
+                    should_notify = False
+                    
+                    if user_time == current_time:
+                        if user_frequency == 'daily':
+                            should_notify = True
+                        elif user_frequency == 'weekdays' and current_weekday in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
+                            should_notify = True
+                        elif user_frequency == 'weekends' and current_weekday in ['saturday', 'sunday']:
+                            should_notify = True
+                    
+                    if should_notify:
+                        users_to_notify.append({
+                            'telegram_id': user['telegram_id'],
+                            'username': user['username'],
+                            'settings': settings
+                        })
+            
+            return users_to_notify
+            
+        except Exception as e:
+            print(f"Error getting users for notification: {e}")
+            return []

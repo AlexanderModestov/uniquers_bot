@@ -10,3 +10,10 @@ class User(BaseModel):
     notification: Optional[bool] = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+class NotificationSettings(BaseModel):
+    id: Optional[int] = None
+    user_id: int
+    settings: Dict[str, Any]
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
