@@ -11,6 +11,14 @@ from bot.messages import Messages
 from bot.config import Config
 from bot.services.notification_scheduler import NotificationScheduler
 
+async def safe_callback_answer(callback_query: types.CallbackQuery, text: str = None):
+    """Safely answer callback query, ignoring timeout errors"""
+    try:
+        await callback_query.answer(text)
+    except Exception:
+        # Ignore callback answer timeouts and other errors
+        pass
+
 # States for FSM
 class UserState(StatesGroup):
     help = State()
@@ -362,7 +370,7 @@ async def back_to_settings(callback_query: types.CallbackQuery, supabase_client)
                 raise edit_error
     except Exception as e:
         logging.error(f"Error in back_to_settings: {e}")
-        await callback_query.answer("Произошла ошибка при загрузке настроек")
+        await safe_callback_answer(callback_query, "Произошла ошибка при загрузке настроек")
 
 @content_router.callback_query(lambda c: c.data in ['format_text', 'format_audio'])
 async def handle_format_selection(callback_query: types.CallbackQuery, supabase_client):
@@ -380,13 +388,21 @@ async def handle_format_selection(callback_query: types.CallbackQuery, supabase_
         await supabase_client.create_or_update_user(user_data)
         
         # Show brief confirmation and redirect back to settings
-        await callback_query.answer(f"✅ Формат изменен на {format_type}")
+        try:
+            await callback_query.answer(f"✅ Формат изменен на {format_type}")
+        except Exception:
+            # Ignore callback answer timeouts
+            pass
         
         # Redirect back to settings menu
         await back_to_settings(callback_query, supabase_client)
     except Exception as e:
         logging.error(f"Error saving format preference: {e}")
-        await callback_query.answer("Произошла ошибка при сохранении настроек")
+        try:
+            await callback_query.answer("Произошла ошибка при сохранении настроек")
+        except Exception:
+            # Ignore callback answer timeouts
+            pass
 
 @content_router.callback_query(lambda c: c.data in ['notifications_on', 'notifications_off'])
 async def handle_notifications_selection(callback_query: types.CallbackQuery, supabase_client):
@@ -423,12 +439,20 @@ async def handle_notifications_selection(callback_query: types.CallbackQuery, su
             if user:
                 await supabase_client.create_or_update_notification_settings(user.id, {})
             
-            await callback_query.answer("✅ Уведомления отключены")
+            try:
+                await callback_query.answer("✅ Уведомления отключены")
+            except Exception:
+                # Ignore callback answer timeouts
+                pass
             await back_to_settings(callback_query, supabase_client)
             
     except Exception as e:
         logging.error(f"Error saving notification preference: {e}")
-        await callback_query.answer("Произошла ошибка при сохранении настроек")
+        try:
+            await callback_query.answer("Произошла ошибка при сохранении настроек")
+        except Exception:
+            # Ignore callback answer timeouts
+            pass
 
 @content_router.callback_query(lambda c: c.data.startswith('notif_freq_'))
 async def handle_notification_frequency_selection(callback_query: types.CallbackQuery, supabase_client):
@@ -459,11 +483,19 @@ async def handle_notification_frequency_selection(callback_query: types.Callback
             # Show time selection with all 24 hours - first page (00-11)
             await show_time_selection(callback_query, frequency_key, frequency_name, page=0)
         else:
-            await callback_query.answer("❌ Неизвестная частота уведомлений")
+            try:
+                await callback_query.answer("❌ Неизвестная частота уведомлений")
+            except Exception:
+                # Ignore callback answer timeouts
+                pass
         
     except Exception as e:
         logging.error(f"Error saving notification frequency: {e}")
-        await callback_query.answer("Произошла ошибка при сохранении настроек")
+        try:
+            await callback_query.answer("Произошла ошибка при сохранении настроек")
+        except Exception:
+            # Ignore callback answer timeouts
+            pass
 
 async def show_time_selection(callback_query: types.CallbackQuery, frequency_key: str, frequency_name: str, page: int = 0):
     """Show time selection with pagination (12 hours per page)"""
@@ -547,11 +579,19 @@ async def handle_time_page_navigation(callback_query: types.CallbackQuery):
             page = int(parts[4])
             
             await show_time_selection(callback_query, frequency_key, frequency_name, page)
-            await callback_query.answer()
+            try:
+                await callback_query.answer()
+            except Exception:
+                # Ignore callback answer timeouts
+                pass
         
     except Exception as e:
         logging.error(f"Error in time page navigation: {e}")
-        await callback_query.answer("Ошибка при навигации")
+        try:
+            await callback_query.answer("Ошибка при навигации")
+        except Exception:
+            # Ignore callback answer timeouts
+            pass
 
 @content_router.callback_query(lambda c: c.data.startswith('notif_time_'))
 async def handle_notification_time_selection(callback_query: types.CallbackQuery, supabase_client):
@@ -565,7 +605,11 @@ async def handle_notification_time_selection(callback_query: types.CallbackQuery
             
             user = await supabase_client.get_user_by_telegram_id(callback_query.from_user.id)
             if not user:
-                await callback_query.answer("Ошибка: пользователь не найден")
+                try:
+                    await callback_query.answer("Ошибка: пользователь не найден")
+                except Exception:
+                    # Ignore callback answer timeouts
+                    pass
                 return
             
             # Save complete notification settings
@@ -584,12 +628,20 @@ async def handle_notification_time_selection(callback_query: types.CallbackQuery
             }
             frequency_name = frequency_names.get(frequency, frequency)
             
-            await callback_query.answer(f"✅ Уведомления настроены: {frequency_name} в {time}")
+            try:
+                await callback_query.answer(f"✅ Уведомления настроены: {frequency_name} в {time}")
+            except Exception:
+                # Ignore callback answer timeouts
+                pass
             await back_to_settings(callback_query, supabase_client)
         
     except Exception as e:
         logging.error(f"Error saving notification time: {e}")
-        await callback_query.answer("Произошла ошибка при сохранении времени")
+        try:
+            await callback_query.answer("Произошла ошибка при сохранении времени")
+        except Exception:
+            # Ignore callback answer timeouts
+            pass
 
 @content_router.callback_query(lambda c: c.data.startswith('quiz_page_'))
 async def handle_quiz_pagination(callback_query: types.CallbackQuery):
@@ -602,11 +654,11 @@ async def handle_quiz_pagination(callback_query: types.CallbackQuery):
         await show_quiz_topics(callback_query.message, page=page, edit_message=True)
         
         # Answer callback query
-        await callback_query.answer()
+        await safe_callback_answer(callback_query)
         
     except Exception as e:
         logging.error(f"Error in handle_quiz_pagination: {e}")
-        await callback_query.answer("Ошибка при навигации по страницам")
+        await safe_callback_answer(callback_query, "Ошибка при навигации по страницам")
 
 @content_router.callback_query(lambda c: c.data in ['start_quiz', 'quiz_results'])
 async def handle_quiz_actions(callback_query: types.CallbackQuery):
@@ -646,7 +698,7 @@ async def handle_materials_web_app(callback_query: types.CallbackQuery):
         )
     except Exception as e:
         logging.error(f"Error in materials_web_app: {e}")
-        await callback_query.answer("Ошибка при загрузке веб-приложения")
+        await safe_callback_answer(callback_query, "Ошибка при загрузке веб-приложения")
 
 @content_router.callback_query(lambda c: c.data == 'materials_videos')
 async def handle_materials_videos(callback_query: types.CallbackQuery):
@@ -668,7 +720,7 @@ async def handle_materials_videos(callback_query: types.CallbackQuery):
         )
     except Exception as e:
         logging.error(f"Error in materials_videos: {e}")
-        await callback_query.answer("Ошибка при загрузке видео")
+        await safe_callback_answer(callback_query, "Ошибка при загрузке видео")
 
 @content_router.callback_query(lambda c: c.data == 'materials_texts')
 async def handle_materials_texts(callback_query: types.CallbackQuery):
@@ -690,7 +742,7 @@ async def handle_materials_texts(callback_query: types.CallbackQuery):
         )
     except Exception as e:
         logging.error(f"Error in materials_texts: {e}")
-        await callback_query.answer("Ошибка при загрузке текстов")
+        await safe_callback_answer(callback_query, "Ошибка при загрузке текстов")
 
 @content_router.callback_query(lambda c: c.data == 'materials_podcasts')
 async def handle_materials_podcasts(callback_query: types.CallbackQuery):
@@ -712,7 +764,7 @@ async def handle_materials_podcasts(callback_query: types.CallbackQuery):
         )
     except Exception as e:
         logging.error(f"Error in materials_podcasts: {e}")
-        await callback_query.answer("Ошибка при загрузке подкастов")
+        await safe_callback_answer(callback_query, "Ошибка при загрузке подкастов")
 
 
 @content_router.message(Command('help'))
