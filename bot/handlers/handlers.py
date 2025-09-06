@@ -264,14 +264,12 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
                     # Send voice message with sources buttons
                     await message.answer_voice(
                         voice=audio_file,
-                        reply_markup=keyboard,
-                        caption="🎧 Аудиоответ"
+                        reply_markup=keyboard
                     )
                 else:
                     # Send voice message without buttons
                     await message.answer_voice(
-                        voice=audio_file,
-                        caption="🎧 Аудиоответ"
+                        voice=audio_file
                     )
                 
                 # Clean up audio file
