@@ -14,7 +14,7 @@ class SupabaseClient:
                 return User(**response.data[0])
             return None
         except Exception as e:
-            print(f"Error getting user: {e}")
+            pass  # User error suppressed for performance
             return None
     
     async def create_or_update_user(self, user_data: Dict[str, Any]) -> Optional[User]:
@@ -30,7 +30,7 @@ class SupabaseClient:
                 return User(**response.data[0])
             return None
         except Exception as e:
-            print(f"Error creating/updating user: {e}")
+            pass  # User creation error suppressed for performance
             return None
     
     async def search_content(self, user_id: int, query_embedding: List[float], limit: int = 5, threshold: float = 0.5) -> List[Dict[str, Any]]:
@@ -52,12 +52,12 @@ class SupabaseClient:
             # Vector search on documents table
             # Table schema: id, content, embedding, metadata, ingestion_date
             # Embedding dimensions: 3072 (OpenAI text-embedding-3-large)
-            print(f"🔍 Starting vector search with threshold={threshold}, limit={limit}")
+            pass  # Vector search start log removed for performance
             
             try:
                 # Method 1: Use Supabase RPC function for vector similarity search
                 try:
-                    print("🔍 Trying Supabase RPC function for vector similarity search...")
+                    pass  # RPC attempt log removed for performance
                     
                     # Create a custom RPC function call for vector search
                     # This avoids URL length limits by sending the vector in the request body
@@ -67,7 +67,7 @@ class SupabaseClient:
                         'match_count': limit
                     }).execute()
                     
-                    print(f"🔍 RPC function returned {len(response.data) if response.data else 0} results")
+                    pass  # RPC result count removed for performance
                     
                     if response.data:
                         # Process RPC results
@@ -84,24 +84,24 @@ class SupabaseClient:
                             })
                     
                 except Exception as rpc_error:
-                    print(f"🔍 RPC function failed (function may not exist): {rpc_error}")
+                    pass  # RPC error log removed for performance
                     response = None
                 
                 # Method 2: Manual similarity calculation with correct Supabase syntax
                 if not results:  # Only try if RPC didn't work
-                    print("🔍 Trying manual similarity calculation...")
+                    pass  # Manual calc start log removed for performance
                     
                     try:
                         # Get all documents with embeddings - FIXED SYNTAX
                         all_docs_response = self.client.table('documents').select('id, content, embedding, metadata, ingestion_date').not_('embedding', 'is', 'null').execute()
                         
                         if all_docs_response.data:
-                            print(f"🔍 Retrieved {len(all_docs_response.data)} documents with embeddings for manual calculation")
+                            pass  # Document retrieval count removed for performance
                             
                             # Calculate similarities manually
                             import numpy as np
                             query_vector = np.array(query_embedding)
-                            print(f"📊 Query vector shape: {query_vector.shape}, norm: {np.linalg.norm(query_vector):.4f}")
+                            pass  # Query vector stats removed for performance
                             
                             doc_similarities = []
                             all_cosine_distances = []  # Track all distances for logging
@@ -119,7 +119,7 @@ class SupabaseClient:
                                     cosine_sim = dot_product / (query_norm * doc_norm)
                                     
                                     # Log individual calculation
-                                    print(f"📄 Doc {doc_id}: dot_product={dot_product:.4f}, doc_norm={doc_norm:.4f}, cosine_sim={cosine_sim:.4f}")
+                                    pass  # Individual doc calculation removed for performance
                                     
                                     all_cosine_distances.append({
                                         'doc_id': doc_id,
@@ -136,30 +136,28 @@ class SupabaseClient:
                                         })
                             
                             # Log complete array of cosine distances
-                            print(f"\n📊 COMPLETE COSINE DISTANCES ARRAY:")
-                            print(f"📊 Total documents processed: {len(all_cosine_distances)}")
-                            print(f"📊 Threshold: {threshold}")
+                            pass  # Cosine distance array header removed for performance
                             
                             for i, dist in enumerate(all_cosine_distances):
                                 status = "✅ ABOVE" if dist['above_threshold'] else "❌ BELOW"
-                                print(f"📊 [{i:2d}] Doc {dist['doc_id']:>3}: {dist['cosine_similarity']:>7.4f} {status} threshold")
+                                pass  # Individual distance log removed for performance
                             
                             # Sort by similarity (highest first) and limit
                             doc_similarities.sort(key=lambda x: x['similarity'], reverse=True)
                             response_data = doc_similarities[:limit]
                             
-                            print(f"\n📊 SIMILARITY RANKING:")
+                            pass  # Similarity ranking header removed for performance
                             for i, doc in enumerate(response_data):
-                                print(f"📊 Rank {i+1}: Doc {doc.get('id')} = {doc['similarity']:.4f}")
+                                pass  # Individual ranking removed for performance
                             
-                            print(f"🔍 Manual calculation found {len(response_data)} documents above threshold {threshold}")
+                            pass  # Manual calc result count removed for performance
 
 
                             # Process RPC results
                             for doc in all_docs_response.data:
                                 similarity = doc.get('similarity', 0)
                                 metadata = doc.get('metadata')
-                                print('metadata: ', metadata.get('file_id'))
+                                pass  # Metadata file_id log removed for performance
                             
                                 results.append({
                                     'id': metadata.get('file_id'),
@@ -170,10 +168,10 @@ class SupabaseClient:
                                 })                            
                             
                         else:
-                            print("🔍 No documents with embeddings found")
+                            pass  # No docs warning removed for performance
                             
                     except Exception as manual_error:
-                        print(f"🔍 Manual similarity calculation failed: {manual_error}")
+                        pass  # Manual calc error removed for performance
                         import traceback
                         traceback.print_exc()
                 
@@ -181,18 +179,18 @@ class SupabaseClient:
                 pass
                 
             except Exception as e:
-                print(f"Error in vector search: {e}")
+                pass  # Vector search error suppressed for performance
                 # Ultimate fallback: basic document retrieval (no similarity)
                 try:
-                    print("🔄 Ultimate fallback: basic document retrieval without similarity...")
+                    pass  # Fallback attempt removed for performance
                     response = self.client.table('documents').select('id, content, metadata, ingestion_date').limit(limit).execute()
                     
                     if response.data:
-                        print(f"🔄 Fallback retrieved {len(response.data)} documents")
+                        pass  # Fallback result count removed for performance
                         for doc in response.data:
                             similarity = doc.get('similarity', 0)
                             metadata = doc.get('metadata')
-                            print('metadata: ', metadata.get('file_id'))
+                            pass  # Fallback metadata log removed for performance
                             
                             results.append({
                                 'id': metadata.get('file_id'),
@@ -202,21 +200,21 @@ class SupabaseClient:
                             })         
                             
                 except Exception as fallback_error:
-                    print(f"⚠️ All search methods failed: {fallback_error}")
+                    pass  # Complete failure error suppressed for performance
             
             # Sort by similarity (highest first) and apply limit
             results.sort(key=lambda x: x.get('similarity', 0), reverse=True)
             final_results = results[:limit]
             
             if final_results:
-                print(f"🎯 Vector Search Complete: Returning {len(final_results)} results (top similarity: {final_results[0]['similarity']:.4f})")
+                pass  # Search completion log removed for performance
             else:
-                print("🎯 Vector Search Complete: No results found")
+                pass  # No results log removed for performance
                 
             return final_results
             
         except Exception as e:
-            print(f"Error in search_content: {e}")
+            pass  # Search content error suppressed for performance
             return []
     
     
@@ -241,7 +239,7 @@ class SupabaseClient:
                 return response.data[0]
             return None
         except Exception as e:
-            print(f"Error creating user: {e}")
+            pass  # User creation error suppressed for performance
             return None
     
     async def get_notification_settings(self, user_id: int) -> Optional[NotificationSettings]:
@@ -252,7 +250,7 @@ class SupabaseClient:
                 return NotificationSettings(**response.data[0])
             return None
         except Exception as e:
-            print(f"Error getting notification settings: {e}")
+            pass  # Notification settings error suppressed for performance
             return None
     
     async def create_or_update_notification_settings(self, user_id: int, settings: Dict[str, Any]) -> Optional[NotificationSettings]:
@@ -274,7 +272,7 @@ class SupabaseClient:
                 return NotificationSettings(**response.data[0])
             return None
         except Exception as e:
-            print(f"Error creating/updating notification settings: {e}")
+            pass  # Notification settings update error suppressed for performance
             return None
     
     async def get_users_for_notification(self, current_time: str, current_weekday: str) -> List[Dict[str, Any]]:
@@ -318,7 +316,7 @@ class SupabaseClient:
             return users_to_notify
             
         except Exception as e:
-            print(f"Error getting users for notification: {e}")
+            pass  # Get notification users error suppressed for performance
             return []
     
     async def get_all_notification_users(self) -> List[User]:
@@ -331,5 +329,5 @@ class SupabaseClient:
             return []
             
         except Exception as e:
-            print(f"Error getting all notification users: {e}")
+            pass  # Get all notification users error suppressed for performance
             return []

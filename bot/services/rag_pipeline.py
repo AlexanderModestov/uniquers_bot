@@ -71,11 +71,7 @@ class RAGPipeline:
         # Generate answer using LLM
         prompt = self.prompt_template.format(context=context, question=question)
 
-        print('--------------------------------')
-        print('--------------------------------')
-        print('prompt: ', prompt)
-        print('--------------------------------')
-        print('--------------------------------')
+        pass  # Prompt debugging removed for performance
             
         response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
         answer = response.content.strip()
