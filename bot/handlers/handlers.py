@@ -249,11 +249,11 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
                 logging.info(f"🎧 Generating audio response for user {message.from_user.id}")
                 tts_service = TextToSpeechService()
                 
-                # Generate audio file
+                # Generate audio file in OGG format for voice messages
                 audio_path = tts_service.text_to_speech(
                     text=response_text,
                     quality_preset="conversational",  # Good for bot responses
-                    output_filename=f"response_{message.from_user.id}_{int(time.time())}.mp3"
+                    output_filename=f"response_{message.from_user.id}_{int(time.time())}.ogg"
                 )
                 
                 # Send audio file
@@ -261,16 +261,16 @@ async def handle_user_question(message: types.Message, state: FSMContext, supaba
                 await processing_message.delete()  # Delete processing message
                 
                 if keyboard:
-                    # Send audio with sources buttons
-                    await message.answer_audio(
-                        audio=audio_file,
+                    # Send voice message with sources buttons
+                    await message.answer_voice(
+                        voice=audio_file,
                         reply_markup=keyboard,
                         caption="🎧 Аудиоответ"
                     )
                 else:
-                    # Send audio without buttons
-                    await message.answer_audio(
-                        audio=audio_file,
+                    # Send voice message without buttons
+                    await message.answer_voice(
+                        voice=audio_file,
                         caption="🎧 Аудиоответ"
                     )
                 

@@ -32,7 +32,7 @@ class TextToSpeechService:
         self.default_voice_id = os.getenv('DEFAULT_VOICE_ID', '21m00Tcm4TlvDq8ikWAM')
         self.default_model = os.getenv('MODEL', 'eleven_monolingual_v1')
         self.output_dir = Path(os.getenv('OUTPUT_DIR', 'output'))
-        self.audio_format = os.getenv('AUDIO_FORMAT', 'mp3')
+        self.audio_format = os.getenv('AUDIO_FORMAT', 'ogg')  # Default to OGG for Telegram voice messages
         
         self.output_dir.mkdir(exist_ok=True)
         
@@ -110,6 +110,9 @@ class TextToSpeechService:
         
         try:
             url = f"{self.base_url}/text-to-speech/{voice_id}"
+            # Add output format as query parameter for OGG/OPUS
+            if self.audio_format == "ogg":
+                url += "?output_format=opus_48000_64"
             response = requests.post(url, json=data, headers=self.headers, timeout=30)
             
             if response.status_code == 401:
