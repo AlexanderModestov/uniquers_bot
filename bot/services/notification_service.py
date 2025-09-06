@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 from aiogram import Bot
 from bot.supabase_client.client import SupabaseClient
@@ -59,19 +59,64 @@ class NotificationService:
             logging.error(f"Failed to send notification to user {telegram_id}: {e}")
             return False
     
+    def parse_timezone_offset(self, tz_string: str) -> int:
+        """Parse timezone string like 'UTC+1' or 'UTC-5' and return offset in hours"""
+        if not tz_string or tz_string == "UTC":
+            return 0
+        
+        try:
+            if tz_string.startswith('UTC'):
+                offset_str = tz_string[3:]  # Remove 'UTC'
+                if offset_str.startswith('+'):
+                    return int(offset_str[1:])
+                elif offset_str.startswith('-'):
+                    return -int(offset_str[1:])
+            return 0
+        except (ValueError, IndexError):
+            return 0
+    
     async def send_scheduled_notifications(self) -> Dict[str, Any]:
         """Send notifications to all users who should receive them now"""
         try:
-            current_time = datetime.now()
-            current_hour = f"{current_time.hour:02d}:00"
-            current_weekday = current_time.strftime('%A').lower()
+            current_utc = datetime.now(timezone.utc)
+            logging.info(f"Checking notifications at UTC: {current_utc}")
             
-            logging.info(f"Checking notifications for {current_hour} on {current_weekday}")
+            # Get all users with notifications enabled
+            all_notification_users = await self.supabase_client.get_all_notification_users()
             
-            # Get users who should receive notifications
-            users_to_notify = await self.supabase_client.get_users_for_notification(
-                current_hour, current_weekday
-            )
+            users_to_notify = []
+            
+            # Check each user's local time
+            for user in all_notification_users:
+                user_timezone_offset = self.parse_timezone_offset(user.timezone)
+                user_local_time = current_utc + timedelta(hours=user_timezone_offset)
+                user_hour = f"{user_local_time.hour:02d}:00"
+                user_weekday = user_local_time.strftime('%A').lower()
+                
+                # Get user's notification settings
+                notification_settings = await self.supabase_client.get_notification_settings(user.id)
+                
+                if notification_settings and notification_settings.settings:
+                    settings = notification_settings.settings
+                    user_time = settings.get('time')
+                    user_frequency = settings.get('frequency')
+                    
+                    if user_time == user_hour:
+                        # Check frequency
+                        should_notify = False
+                        weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+                        weekends = ['saturday', 'sunday']
+                        
+                        if user_frequency == 'daily':
+                            should_notify = True
+                        elif user_frequency == 'weekdays' and user_weekday in weekdays:
+                            should_notify = True
+                        elif user_frequency == 'weekends' and user_weekday in weekends:
+                            should_notify = True
+                        
+                        if should_notify:
+                            users_to_notify.append(user)
+                            logging.info(f"User {user.telegram_id} matches: {user_hour} on {user_weekday} (timezone: {user.timezone})")
             
             if not users_to_notify:
                 logging.info("No users to notify at this time")

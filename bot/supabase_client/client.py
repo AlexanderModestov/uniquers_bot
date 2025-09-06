@@ -320,3 +320,16 @@ class SupabaseClient:
         except Exception as e:
             print(f"Error getting users for notification: {e}")
             return []
+    
+    async def get_all_notification_users(self) -> List[User]:
+        """Get all users who have notifications enabled"""
+        try:
+            response = self.supabase.table('users').select('*').eq('notification', True).execute()
+            
+            if response.data:
+                return [User(**user_data) for user_data in response.data]
+            return []
+            
+        except Exception as e:
+            print(f"Error getting all notification users: {e}")
+            return []

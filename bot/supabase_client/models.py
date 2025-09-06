@@ -8,6 +8,7 @@ class User(BaseModel):
     username: Optional[str] = None
     isAudio: Optional[bool] = False
     notification: Optional[bool] = False
+    timezone: Optional[str] = "UTC"  # User's timezone (e.g., "Europe/Berlin", "UTC")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

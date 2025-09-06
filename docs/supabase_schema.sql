@@ -8,6 +8,7 @@ CREATE TABLE users (
     username VARCHAR(255),
     isAudio BOOLEAN DEFAULT FALSE,
     notification BOOLEAN DEFAULT FALSE,
+    timezone VARCHAR(10) DEFAULT 'UTC', -- User's timezone (e.g., 'UTC+1', 'UTC-5')
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
