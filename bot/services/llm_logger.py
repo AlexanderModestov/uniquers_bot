@@ -226,6 +226,7 @@ class LLMLogger:
             bool: True if logged successfully, False otherwise
         """
         try:
+            self.logger.info(f"🔍 Attempting to log {request_type} request - Model: {model}, User: {user_id}, Latency: {latency_ms}ms")
             await self.supabase_client.log_llm_request(
                 request_type=request_type,
                 model=model,
@@ -245,9 +246,12 @@ class LLMLogger:
                 raw_request=raw_request,
                 raw_response=raw_response
             )
+            self.logger.info(f"✅ Successfully logged {request_type} request")
             return True
         except Exception as e:
-            self.logger.error(f"Failed to log LLM request: {e}")
+            self.logger.error(f"❌ Failed to log LLM request: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 

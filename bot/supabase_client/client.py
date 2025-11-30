@@ -408,5 +408,8 @@ class SupabaseClient:
             return None
 
         except Exception as e:
-            pass  # LLM logging error suppressed to not break main functionality
+            import logging
+            logging.error(f"Failed to log LLM request: {e}")
+            import traceback
+            traceback.print_exc()
             return None
