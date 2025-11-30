@@ -323,11 +323,90 @@ class SupabaseClient:
         """Get all users who have notifications enabled"""
         try:
             response = self.supabase.table('users').select('*').eq('notification', True).execute()
-            
+
             if response.data:
                 return [User(**user_data) for user_data in response.data]
             return []
-            
+
         except Exception as e:
             pass  # Get all notification users error suppressed for performance
             return []
+
+    async def log_llm_request(
+        self,
+        request_type: str,
+        model: str,
+        user_id: Optional[int] = None,
+        session_id: Optional[str] = None,
+        input_text: Optional[str] = None,
+        input_metadata: Optional[Dict[str, Any]] = None,
+        output_text: Optional[str] = None,
+        output_metadata: Optional[Dict[str, Any]] = None,
+        tokens_prompt: Optional[int] = None,
+        tokens_completion: Optional[int] = None,
+        tokens_total: Optional[int] = None,
+        latency_ms: Optional[int] = None,
+        cost_usd: Optional[float] = None,
+        success: bool = True,
+        error_message: Optional[str] = None,
+        raw_request: Optional[Dict[str, Any]] = None,
+        raw_response: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Log an LLM API request to the database
+
+        Args:
+            request_type: Type of request ('chat', 'embedding', 'transcription')
+            model: Model name used
+            user_id: Database user ID
+            session_id: Session identifier
+            input_text: Input text (for chat/embedding)
+            input_metadata: Additional input metadata
+            output_text: Output text (for chat/transcription)
+            output_metadata: Additional output metadata
+            tokens_prompt: Prompt token count
+            tokens_completion: Completion token count
+            tokens_total: Total token count
+            latency_ms: Request latency in milliseconds
+            cost_usd: Estimated cost in USD
+            success: Whether request succeeded
+            error_message: Error message if failed
+            raw_request: Raw request data for debugging
+            raw_response: Raw response data for debugging
+
+        Returns:
+            The inserted log record, or None if failed
+        """
+        try:
+            log_data = {
+                'request_type': request_type,
+                'model': model,
+                'user_id': user_id,
+                'session_id': session_id,
+                'input_text': input_text,
+                'input_metadata': input_metadata or {},
+                'output_text': output_text,
+                'output_metadata': output_metadata or {},
+                'tokens_prompt': tokens_prompt,
+                'tokens_completion': tokens_completion,
+                'tokens_total': tokens_total,
+                'latency_ms': latency_ms,
+                'cost_usd': cost_usd,
+                'success': success,
+                'error_message': error_message,
+                'raw_request': raw_request,
+                'raw_response': raw_response
+            }
+
+            # Remove None values to avoid column errors
+            log_data = {k: v for k, v in log_data.items() if v is not None}
+
+            response = self.client.table('llm_request_logs').insert(log_data).execute()
+
+            if response.data:
+                return response.data[0]
+            return None
+
+        except Exception as e:
+            pass  # LLM logging error suppressed to not break main functionality
+            return None
